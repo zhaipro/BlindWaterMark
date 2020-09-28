@@ -2,7 +2,6 @@
 # -*- coding: utf8 -*-
 
 import sys
-import random
 
 import cv2
 import numpy as np
@@ -15,24 +14,16 @@ def encode(im, wm, alpha=30.0, seed=20160930):
     assert hwm.shape[1] > wm.shape[1]
     hwm[:wm.shape[0], :wm.shape[1]] = wm
 
-    random.seed(seed)
-    m, n = np.arange(hwm.shape[0]), np.arange(hwm.shape[1])
-    random.shuffle(m)
-    random.shuffle(n)
+    np.random.seed(seed)
+    m = np.random.permutation(hwm.shape[0])
+    n = np.random.permutation(hwm.shape[1])
     rwm = np.zeros(im.shape)
-    for i in range(hwm.shape[0]):
-        for j in range(hwm.shape[1]):
-            rwm[i, j] = hwm[m[i], n[j]]
+    rwm[:h // 2] = hwm[m][:, n]
 
     _h = hwm.shape[0]
     rwm[-_h:] = np.rot90(rwm[:_h], 2)
 
     f1 = np.fft.fft2(im, axes=(0, 1))
-    t = np.abs(f1)
-    print(t.min(), t.max(), t.mean())
-    t = t / t.max() * 255
-    cv2.imshow('f1', t)
-    cv2.waitKey()
     f2 = f1 + alpha * rwm
     _im = np.fft.ifft2(f2, axes=(0, 1))
 
@@ -42,10 +33,9 @@ def encode(im, wm, alpha=30.0, seed=20160930):
 
 
 def decode(img, img_wm, alpha=30.0, seed=20160930):
-    random.seed(seed)
-    m, n = np.arange(int(img.shape[0] * 0.5)), np.arange(img.shape[1])
-    random.shuffle(m)
-    random.shuffle(n)
+    np.random.seed(seed)
+    m = np.random.permutation(img.shape[0] // 2)
+    n = np.random.permutation(img.shape[1])
 
     f1 = np.fft.fft2(img, axes=(0, 1))
     f2 = np.fft.fft2(img_wm, axes=(0, 1))
@@ -110,7 +100,7 @@ if __name__ == '__main__':
         im = cv2.imread(fn1)
         wm = cv2.imread(fn2)
         img_wm = encode(im, wm)
-        assert cv2.imwrite(fn3, img_wm, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
+        assert cv2.imwrite(fn3, img_wm)
     elif cmd == 'decode':
         img = cv2.imread(fn1)
         img_wm = cv2.imread(fn2)
