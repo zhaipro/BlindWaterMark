@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding: utf8 -*-
+# -*- coding: utf-8 -*-
 
 import sys
 
@@ -9,55 +9,44 @@ import numpy as np
 
 def encode(im, wm, alpha=30.0, seed=20160930):
     h, w, c = im.shape
-    hwm = np.zeros((int(h * 0.5), w, c))
-    assert hwm.shape[0] > wm.shape[0]
-    assert hwm.shape[1] > wm.shape[1]
-    hwm[:wm.shape[0], :wm.shape[1]] = wm
+    rwm = np.zeros((h - 1, w // 2, c))
+    wm = np.rot90(wm)
+    rwm[:wm.shape[0], :wm.shape[1]] = wm
 
     np.random.seed(seed)
-    m = np.random.permutation(hwm.shape[0])
-    n = np.random.permutation(hwm.shape[1])
-    rwm = np.zeros(im.shape)
-    rwm[:h // 2] = hwm[m][:, n]
+    m = np.random.permutation(rwm.shape[0])
+    n = np.random.permutation(rwm.shape[1])
+    rwm = rwm[m][:, n]
 
-    _h = hwm.shape[0]
-    rwm[-_h:] = np.rot90(rwm[:_h], 2)
-
-    f1 = np.fft.fft2(im, axes=(0, 1))
-    f2 = f1 + alpha * rwm
-    _im = np.fft.ifft2(f2, axes=(0, 1))
-
-    img_wm = np.real(_im)
+    f1 = np.fft.rfft2(im, axes=(0, 1))
+    f1[1:, 1:] += f1[1:, 1:] / np.abs(f1[1:, 1:]) * alpha * rwm
+    img_wm = np.fft.irfft2(f1, axes=(0, 1))
 
     return img_wm
 
 
 def decode(img, img_wm, alpha=30.0, seed=20160930):
     np.random.seed(seed)
-    m = np.random.permutation(img.shape[0] // 2)
-    n = np.random.permutation(img.shape[1])
+    m = np.random.permutation(img.shape[0] - 1)
+    n = np.random.permutation(img.shape[1] // 2)
 
-    f1 = np.fft.fft2(img, axes=(0, 1))
-    f2 = np.fft.fft2(img_wm, axes=(0, 1))
+    f1 = np.fft.rfft2(img, axes=(0, 1))
+    f2 = np.fft.rfft2(img_wm, axes=(0, 1))
 
-    rwm = (f2 - f1) / alpha
-    rwm = np.real(rwm)
+    rwm = (f2 - f1) / (f1 / np.abs(f1) * alpha)
+    rwm = np.real(rwm)[1:, 1:]
 
     wm = np.zeros(rwm.shape)
-    for i in range(int(rwm.shape[0] * 0.5)):
+    for i in range(rwm.shape[0]):
         for j in range(rwm.shape[1]):
             wm[m[i], n[j]] = rwm[i, j]
-
-    for i in range(int(rwm.shape[0] * 0.5)):
-        for j in range(rwm.shape[1]):
-            wm[-m[i], -n[j]] = rwm[-1 - i, -1 - j]
     return wm
 
 
 if __name__ == '__main__':
     cmd = None
     seed = 20160930
-    alpha = 3.0
+    alpha = 30.0
     if '-h' in sys.argv or '--help' in sys.argv or len(sys.argv) < 2:
         print('Usage: python bwm.py <cmd> [arg...] [opts...]')
         print('  cmds:')
@@ -67,7 +56,7 @@ if __name__ == '__main__':
         print('           image + image(encoded) -> watermark')
         print('  opts:')
         print('    --seed <int>,     Manual setting random seed (default is 20160930)')
-        print('    --alpha <float>,  Manual setting alpha (default is 3.0)')
+        print('    --alpha <float>,  Manual setting alpha (default is 30.0)')
         sys.exit(1)
     cmd = sys.argv[1]
     if cmd != 'encode' and cmd != 'decode':
@@ -99,10 +88,10 @@ if __name__ == '__main__':
     if cmd == 'encode':
         im = cv2.imread(fn1)
         wm = cv2.imread(fn2)
-        img_wm = encode(im, wm)
+        img_wm = encode(im, wm, alpha=alpha)
         assert cv2.imwrite(fn3, img_wm)
     elif cmd == 'decode':
         img = cv2.imread(fn1)
         img_wm = cv2.imread(fn2)
-        wm = decode(img, img_wm)
+        wm = decode(img, img_wm, alpha=alpha)
         assert cv2.imwrite(fn3, wm)
